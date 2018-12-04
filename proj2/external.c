@@ -189,7 +189,9 @@ void hdb_insert(hdbHandler *handler, wchar_t *str)
             // 將最後 collision 的 node 指向新的 node
             Knode collisionNode = {tmpNode.keyPos, tmpNode.keyLen, tmpNode.cnt, handler->ndx, 0};
             writeNode(handler, previous, 0, NULL, &collisionNode);
-            // 後續在插入新的 internal node
+            Knode newNode = {0, 0, 1, 0, 0};
+            writeNode(handler, handler->ndx++, 0, str, &newNode);
+            return;
         }
     }
     else    // totally new
@@ -213,14 +215,16 @@ void hdb_insert(hdbHandler *handler, wchar_t *str)
         {
             handler->hashTable[hashValue].nodePos = handler->ndx;
             handler->hashTable[hashValue].filePos = 0;
-            // 後續在插入新的 internal node
+            Knode newNode = {0, 0, 1, 0, 0};
+            writeNode(handler, handler->ndx++, 0, str, &newNode);
+            return;
         }
     }
 
     //printf("In ndx = %u, nodeSize = %u, keyBufSized = %u, keyused = %u\n", handler->ndx, handler->KnodeSize, handler->keyBufSized, (uint)(handler->keyBufPtr - handler->keyBuf + wcslen(str)));
     // 插入新的 internal node
-    Knode newNode = {0, 0, 1, 0, 0};
-    writeNode(handler, handler->ndx++, 0, str, &newNode);
+    //Knode newNode = {0, 0, 1, 0, 0};
+    //writeNode(handler, handler->ndx++, 0, str, &newNode);
     return;
 }
 ////////////////////////////////////////////////////////////////////////////////
