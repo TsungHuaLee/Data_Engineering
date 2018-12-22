@@ -5,11 +5,8 @@
 #include <locale.h>
 #include <limits.h>
 const size_t bufferSize = 10000;
-const char* files[] = {"./data/test.rec", "./data/ettoday0.rec", "./data/ettoday1.rec", "./data/ettoday2.rec", "./data/ettoday3.rec", "./data/ettoday4.rec", "./data/ettoday5.rec"};
+const char* files[] = {"./data/ettoday0.rec", "./data/ettoday1.rec", "./data/ettoday2.rec", "./data/ettoday3.rec", "./data/ettoday4.rec", "./data/ettoday5.rec"};
 const size_t fileNum = 6;
-wchar_t **search;
-int search_num;
-int *weight;
 int k_error = 1;
 size_t recNum = 100;
 typedef struct news
@@ -19,35 +16,47 @@ typedef struct news
     wchar_t *title;
     wchar_t *context;
 }newsRecord;
-
-void setParameter(const int argc, const char **argv)
+typedef struct Srch
 {
-    search = (wchar_t**)malloc(sizeof(wchar_t*) * (argc + 1));
-    weight = (int*)malloc(sizeof(int) * (argc + 1));
-    search_num = 0;
+    wchar_t** exclude;
+    wchar_t** include;
+    wchar_t** favor;
+    int ex_num;
+    int in_num;
+    int fav_num;
+}srchStruct;
+
+void setParameter(const int argc, const char **argv, srchStruct* search)
+{
+    search->exclude = (wchar_t**)malloc(sizeof(wchar_t*) * (argc));
+    search->include = (wchar_t**)malloc(sizeof(wchar_t*) * (argc));
+    search->favor = (wchar_t**)malloc(sizeof(wchar_t*) * (argc));
+    search->ex_num = 0; search->in_num = 0; search->fav_num = 0;
     for(int i = 1; i < argc; i++)
     {
-        search[i-1] = (wchar_t*)malloc(sizeof(wchar_t) * (strlen(argv[i]) + 1));
-        char *temp = (char*)malloc(sizeof(char) * (strlen(argv[i]) + 1));
         if(argv[i][0] == '-')
         {
-            strncpy(temp, (*(argv + i) + 1), strlen(argv[i]) - 1);
-            mbstowcs(search[i-1], temp, strlen(temp));
-            weight[i-1] = -1;
+            search->exclude[search->ex_num] = (wchar_t*)malloc(sizeof(wchar_t) * strlen(argv[i]));
+            mbstowcs(search->exclude[search->ex_num], (*(argv + i + 1)), strlen(*(argv + i + 1)) );
+            search->ex_num++;
+            i++;
+            continue;
         }
         else if(argv[i][0] == '+')
         {
-            strncpy(temp, (*(argv + i) + 1), strlen(argv[i]) - 1);
-            mbstowcs(search[i-1], temp, strlen(temp));
-            weight[i-1] = 1;
+            search->include[search->in_num] = (wchar_t*)malloc(sizeof(wchar_t) * strlen(argv[i]));
+            mbstowcs(search->include[search->in_num], (*(argv + i + 1)), strlen(*(argv + i + 1)) );
+            search->in_num++;
+            i++;
+            continue;
         }
         else
         {
-            mbstowcs(search[i-1], argv[i], strlen(argv[i]));
-            weight[i-1] = 1;
+            search->favor[search->fav_num] = (wchar_t*)malloc(sizeof(wchar_t) * strlen(argv[i]));
+            mbstowcs(search->favor[search->fav_num], (*(argv + i + 1)), strlen(*(argv + i + 1)) );
+            search->fav_num++;
+            i++;
         }
-        search_num++;
-        free(temp);
     }
     return ;
 }
@@ -73,49 +82,53 @@ int min(int a, int b, int c)
     re = (re < c)?re:c;
     return re;
 }
-// return +N -> 要的, -N -> 不要的, 0 -> not found
-int matching(wchar_t *str, int idx, int score){
+
+int matching(wchar_t *str, wchar_t * search)
+{
     // totally matching
     wchar_t *test_match;
-    test_match = wcsstr(str, search[idx]);
+    int col = wcslen(str) , row = wcslen(search);
+    test_match = wcsstr(str, search);
     if(test_match != NULL)
-        return score * weight[idx];
+        return row;
     // approximate match
-    int table[wcslen(search[idx]) + 1][wcslen(str) + 1];
+    int table[row + 1][col + 1];
+    // initialize table
     memset(table, 0, sizeof(table));
-    //initialize table
-    for(int i = 0; i <= wcslen(str); i++)
+    for(int i = 0; i <= col; i++)
         table[0][i] = 0;
-    for(int i = 0; i <= wcslen(search[idx]); i++)
+    for(int i = 0; i <= row; i++)
         table[i][0] = i;
     //calculate
-    for(int j = 1; j <= wcslen(str); j++)
-        for(int i = 1;i <= wcslen(search[idx]); i++)
+    for(int j = 1; j <= col; j++)
+        for(int i = 1;i <= row; i++)
         {
-            int neq = (str[j-1] != search[idx][i-1])?1:0;
-            table[i][j] = min(table[i-1][j-1] + neq, table[i-1][j] + 1, table[i][j-1] + 1);
+            table[i][j] = min(table[i-1][j-1] + (str[j-1] != search[i-1]), table[i-1][j] + 1, table[i][j-1] + 1);
         }
 
-    for(int i = wcslen(search[idx]),j = wcslen(search[idx]); j <= wcslen(str); j++)
+    for(int i = row,j = row; j <= col; j++)
     {
         //printf("\ni = %d j = %d table = %d, k_error = %d\n",i , j, table[i][j], k_error);
         if(table[i][j] <= k_error)
-            return score * weight[idx] / 10;
+            return row - table[i][j];
     }
     return 0;
 }
+
 int cmp( const void *a ,const void *b)
 {
     return (*(newsRecord *)a).score < (*(newsRecord *)b).score ? 1 : -1;
 }
-size_t parse(newsRecord** results)
+
+size_t parse(newsRecord** results, srchStruct* search)
 {
-    wchar_t *buffer = NULL;
+    wchar_t *buffer = NULL, *ret;
     size_t cnt = 0;
+    int match = 0, score = 0;
     newsRecord oneNews;
     newsRecord* totalRec = (newsRecord*)malloc(sizeof(newsRecord)*recNum);
     FILE *fin;
-    for(int i = 0; i < 2; i++)
+    for(int i = 0; i < fileNum; i++)
     {
         printf("search file %d\n", i);
         fin = fopen(files[i], "rb");    //open file
@@ -128,32 +141,51 @@ size_t parse(newsRecord** results)
         buffer = (wchar_t*)malloc(sizeof(wchar_t)*(bufferSize+10));
         while(fgetws(buffer, bufferSize, fin) != NULL)
         {
-            if(cnt == 50)
-                break;
-            int score = 0;
             if(wcsncmp(buffer, L"@GAISRec:", 9) != 0) continue;
-            fgetws(buffer,bufferSize, fin);     //url
+            ret = fgetws(buffer,bufferSize, fin);     //url
             oneNews.url = (wchar_t*)malloc(sizeof(wchar_t)*(wcslen(buffer) + 1));
             formatLine(buffer);
             wcscpy(oneNews.url, buffer + 3);    //omit "@U:"
-            fgetws(buffer, bufferSize, fin);    //title
+            ret = fgetws(buffer, bufferSize, fin);    //title
             oneNews.title = (wchar_t*)malloc(sizeof(wchar_t)*(wcslen(buffer) + 1));
             formatLine(buffer);
             wcscpy(oneNews.title, buffer + 3);  //omit "@T:"
-            // searching
-            for(int idx = 0; idx < search_num; idx++)
-            {
-                score += matching(oneNews.title, idx, 50);
-            }
-            fgetws(buffer, bufferSize, fin);    //omit "@B:"
-            fgetws(buffer, bufferSize, fin);    //main context
+            ret = fgetws(buffer, bufferSize, fin);    //omit "@B:"
+            ret = fgetws(buffer, bufferSize, fin);    //main context
             oneNews.context = (wchar_t*)malloc(sizeof(wchar_t)*(wcslen(buffer) + 1));
             formatLine(buffer);
             wcscpy(oneNews.context, buffer);
-            // searching
-            for(int idx = 0; idx < search_num; idx++)
+
+            match = 0; score = 0;
+            for(int idx = 0; idx < search->ex_num; idx++)
             {
-                score += matching(oneNews.context, idx, 10);
+                score += matching(oneNews.title, search->exclude[idx]);
+                score += matching(oneNews.context, search->exclude[idx]);
+                if(score != 0)
+                {
+                    match++;
+                    break;
+                }
+            }
+            if(match != 0)
+                continue;
+            for(int idx = 0; idx < search->in_num; idx++)
+            {
+                int temp = matching(oneNews.title, search->include[idx]) * 100;
+                temp += matching(oneNews.context, search->include[idx]) * 50;
+                if(temp == 0)
+                {
+                    break;
+                }
+                score += temp;
+                match++;
+            }
+            if(match != search->in_num)
+                continue;
+            for(int idx = 0; idx < search->fav_num; idx++)
+            {
+                score += matching(oneNews.title, search->favor[idx]) * 50;
+                score += matching(oneNews.context, search->favor[idx]) * 10;
             }
             if(score > 0)
             {
@@ -198,15 +230,39 @@ size_t parse(newsRecord** results)
 
 int main(const int argc, const char** argv)
 {
+    setlocale(LC_CTYPE, "");
     FILE* fout = fopen("final.rec", "wb");
     newsRecord* totalRec;
-    setlocale(LC_CTYPE, "");
-    setParameter(argc, argv);
-    //printf("searching!!!\n");
-    size_t cnt = parse(&totalRec);
+    srchStruct search;
+
+    setParameter(argc, argv, &search);
+    if(!search.in_num && !search.fav_num)
+    {
+        printf("nothing to search\n");
+        return 0;
+    }
+
+    size_t cnt = parse(&totalRec, &search);
+    printf("cnt = %lu\n", cnt);
     qsort(totalRec, cnt, sizeof(newsRecord), cmp);
     printf("sorting!!!\n");
+    char newline = L'\n', *temp = (char*)malloc(sizeof(char)*1000000);
+    int ret;
     for(int i = 0; i < cnt; i++)
-        fwprintf(fout, L"cnt = %d, %d\n%ls\n%ls\n%ls\n", i,totalRec[i].score, totalRec[i].url, totalRec[i].title, totalRec[i].context);
+    {
+        fwrite(&totalRec[i].score, sizeof(int), 1, fout); //score
+        fwrite(&newline, sizeof(char), 1, fout);
+        ret = wcstombs ( temp, totalRec[i].title, sizeof(wchar_t)*wcslen(totalRec[i].title) ); //title
+        fwrite(temp, sizeof(char), strlen(temp), fout);
+        fwrite(&newline, sizeof(char), 1, fout);
+        ret = wcstombs ( temp, totalRec[i].url, sizeof(wchar_t)*wcslen(totalRec[i].url) ); //url
+        fwrite(temp, sizeof(char), strlen(temp), fout);
+        fwrite(&newline, sizeof(char), 1, fout);
+        ret = wcstombs ( temp, totalRec[i].context, sizeof(wchar_t)*wcslen(totalRec[i].context) ); // context
+        fwrite(temp, sizeof(char), strlen(temp), fout);
+        fwrite(&newline, sizeof(char), 1, fout);
+    }
+    free(temp);
+    fclose(fout);
     return 0;
 }
