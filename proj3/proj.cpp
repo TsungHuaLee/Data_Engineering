@@ -4,6 +4,9 @@
 #include <wchar.h>
 #include <locale.h>
 #include <limits.h>
+#include <unordered_map>
+using namespace std;
+
 const size_t bufferSize = 10000;
 const char* files[] = {"./data/ettoday0.rec", "./data/ettoday1.rec", "./data/ettoday2.rec", "./data/ettoday3.rec", "./data/ettoday4.rec", "./data/ettoday5.rec"};
 const size_t fileNum = 2;
@@ -76,6 +79,79 @@ void formatLine(wchar_t *str)
     }
 }
 
+
+// A utility function to get maximum of two integers
+int max (int a, int b) { return (a > b)? a: b; }
+
+// The preprocessing function for Boyer Moore's
+// bad character heuristic
+void badCharHeuristic( wchar_t *str, int size, unordered_map<wchar_t, int>& badchar)
+{
+    int i;
+    /* Fill the actual value of last occurrence
+     of a character */
+    for (i = 0; i < size; i++)
+    {
+        badchar[str[i]] = i;
+    }
+}
+
+/* A pattern searching function that uses Bad
+   Character Heuristic of Boyer Moore Algorithm */
+int Boyer_Moore( wchar_t *txt,  wchar_t *pat)
+{
+    int re = 0;
+    int m = wcslen(pat);
+    int n = wcslen(txt);
+
+    unordered_map<wchar_t, int> badchar;
+
+    /* Fill the bad character array by calling
+       the preprocessing function badCharHeuristic()
+       for given pattern */
+    badCharHeuristic(pat, m, badchar);
+
+    int s = 0;  /* s is shift of the pattern with
+                 respect to text */
+    while(s <= (n - m))
+    {
+        int j = m-1;
+
+        /* Keep reducing index j of pattern while
+           characters of pattern and text are
+           matching at this shift s */
+        while(j >= 0 && pat[j] == txt[s+j])
+            j--;
+
+        /* If the pattern is present at current
+           shift, then index j will become -1 after
+           the above loop */
+        if (j < 0)
+        {
+            //printf("\n pattern occurs at shift = %d\n", s);
+            re++;
+            /* Shift the pattern so that the next
+               character in text aligns with the last
+               occurrence of it in pattern.
+               The condition s+m < n is necessary for
+               the case when pattern occurs at the end
+               of text */
+            s += (s+m < n)? m-badchar[txt[s+m]] : 1;
+        }
+        else
+            /* Shift the pattern so that the bad character
+               in text aligns with the last occurrence of
+               it in pattern. The max function is used to
+               make sure that we get a positive shift.
+               We may get a negative shift if the last
+               occurrence  of bad character in pattern
+               is on the right side of the current
+               character. */
+            s += max(1, j - badchar[txt[s+j]]);
+    }
+    return re;
+}
+
 int min(int a, int b, int c)
 {
     int re = a;
@@ -119,10 +195,11 @@ int cmp( const void *a ,const void *b)
 {
     return (*(newsRecord *)a).score < (*(newsRecord *)b).score ? 1 : -1;
 }
+
 /*php 調用 c code wchar_t時有問題 , 解法https://mikecoder.cn/post/135/?fbclid=IwAR3h_N-i35t0_BKy51PANpeuhdJ_Tlv5ZB_IGaEn90yjsMWIAc41Z7QBJT4*/
 size_t parse(newsRecord** results, srchStruct* search)
 {
-    wchar_t *buffer = NULL, *ret, *test_match;
+    wchar_t *buffer = NULL, *ret = NULL;
     size_t cnt = 0;
     int match = 0, score = 0;
     newsRecord oneNews;
@@ -161,24 +238,21 @@ size_t parse(newsRecord** results, srchStruct* search)
             formatLine(buffer);
             wcscpy(oneNews.context, buffer+3);
 
-            /* searching!!! */
-            match = 0; score = 0, test_match = NULL;
-            for(int idx = 0; idx < search->ex_num; idx++)
+            /* searching exclude!!! */
+            match = 0; score = 0;
+            for(int idx = 0; idx < search->ex_num && score == 0; idx++)
             {
-                test_match = wcsstr(oneNews.title, search->exclude[idx]);
-                if(test_match != NULL)
-                    break;
-                test_match = wcsstr(oneNews.context, search->exclude[idx]);
-                if(test_match != NULL)
-                    break;
+                score += Boyer_Moore(oneNews.title, search->exclude[idx]);
+                score += Boyer_Moore(oneNews.context, search->exclude[idx]);
             }
-            if(test_match!=NULL)
+            if(score != 0)
                 continue;
 
+            /* searching exclude!!! */
             for(int idx = 0; idx < search->in_num; idx++)
             {
-                int temp = matching(oneNews.title, search->include[idx]) * 100;
-                temp += matching(oneNews.context, search->include[idx]) * 10;
+                int temp = Boyer_Moore(oneNews.title, search->include[idx]) * 100;
+                temp += Boyer_Moore(oneNews.context, search->include[idx]) * 10;
                 if(temp == 0)
                     break;
                 score += temp;
@@ -187,6 +261,7 @@ size_t parse(newsRecord** results, srchStruct* search)
             if(match != search->in_num)
                 continue;
 
+            /* searching favor!!! */
             for(int idx = 0; idx < search->fav_num; idx++)
             {
                 score += matching(oneNews.title, search->favor[idx]) * 100;
