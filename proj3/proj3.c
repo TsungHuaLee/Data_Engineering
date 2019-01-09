@@ -56,7 +56,6 @@ void setParameter(const int argc, const char **argv, srchStruct* search)
             search->favor[search->fav_num] = (wchar_t*)malloc(sizeof(wchar_t) * strlen(argv[i]));
             mbstowcs(search->favor[search->fav_num], (*(argv + i)), strlen(*(argv + i)) );
             search->fav_num++;
-            i++;
         }
     }
     return ;

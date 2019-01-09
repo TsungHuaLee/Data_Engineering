@@ -59,7 +59,6 @@ void setParameter(const int argc, const char **argv, srchStruct* search)
             search->favor[search->fav_num] = (wchar_t*)malloc(sizeof(wchar_t) * strlen(argv[i]));
             mbstowcs(search->favor[search->fav_num], (*(argv + i)), strlen(*(argv + i)) );
             search->fav_num++;
-            i++;
         }
     }
     return ;
@@ -167,7 +166,7 @@ int matching(wchar_t *str, wchar_t * search)
     wchar_t *test_match;
     test_match = wcsstr(str, search);
     if(test_match != NULL)
-        return row;
+        return 10;
     /* approximate match */
     int table[row + 1][col + 1];
     /* initialize table */
@@ -186,7 +185,7 @@ int matching(wchar_t *str, wchar_t * search)
     for(int i = row,j = row; j <= col; j++)
     {
         if(table[i][j] <= k_error)
-            return row - table[i][j];
+            return 1;
     }
     return 0;
 }
@@ -251,8 +250,8 @@ size_t parse(newsRecord** results, srchStruct* search)
             /* searching exclude!!! */
             for(int idx = 0; idx < search->in_num; idx++)
             {
-                int temp = Boyer_Moore(oneNews.title, search->include[idx]) * 100;
-                temp += Boyer_Moore(oneNews.context, search->include[idx]) * 10;
+                int temp = Boyer_Moore(oneNews.title, search->include[idx]) * 1000;
+                temp += Boyer_Moore(oneNews.context, search->include[idx]) * 100;
                 if(temp == 0)
                     break;
                 score += temp;
@@ -264,8 +263,8 @@ size_t parse(newsRecord** results, srchStruct* search)
             /* searching favor!!! */
             for(int idx = 0; idx < search->fav_num; idx++)
             {
-                score += matching(oneNews.title, search->favor[idx]) * 100;
-                score += matching(oneNews.context, search->favor[idx]) * 10;
+                score += matching(oneNews.title, search->favor[idx]) * 300;
+                score += matching(oneNews.context, search->favor[idx]) * 30;
             }
 
             if(score > 0)
@@ -316,6 +315,8 @@ int main(const int argc, const char** argv)
     newsRecord* totalRec;
     srchStruct search;
     setParameter(argc, argv, &search);
+    printf("in = %d  fav = %d\n", search.in_num, search.fav_num);
+    /*
     if(!search.in_num && !search.fav_num)
     {
         printf("nothing to search!!!\n");
@@ -338,21 +339,10 @@ int main(const int argc, const char** argv)
     int ret;
     for(int i = 0; i < cnt; i++)
     {
-        /*
-        ret = wcstombs ( temp, totalRec[i].title, sizeof(wchar_t)*wcslen(totalRec[i].title) ); //title
-        fwrite(temp, sizeof(char), strlen(temp), fout);
-        fwrite(&delim, sizeof(char), 1, fout);
-        ret = wcstombs ( temp, totalRec[i].url, sizeof(wchar_t)*wcslen(totalRec[i].url) ); //url
-        fwrite(temp, sizeof(char), strlen(temp), fout);
-        fwrite(&delim, sizeof(char), 1, fout);
-        fwrite(totalRec[i].score)
-        ret = wcstombs ( temp, totalRec[i].context, sizeof(wchar_t)*wcslen(totalRec[i].context) ); // context
-        fwrite(temp, sizeof(char), strlen(temp), fout);
-        fwrite(&newline, sizeof(char), 1, fout);
-        */
         printf("%ls\t%ls\t%d\t%ls\n", totalRec[i].title, totalRec[i].url, totalRec[i].score, totalRec[i].context);
     }
     free(temp);
     fclose(fout);
+    */
     return 0;
 }
