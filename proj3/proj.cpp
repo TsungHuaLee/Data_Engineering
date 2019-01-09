@@ -315,8 +315,7 @@ int main(const int argc, const char** argv)
     newsRecord* totalRec;
     srchStruct search;
     setParameter(argc, argv, &search);
-    printf("in = %d  fav = %d\n", search.in_num, search.fav_num);
-    /*
+
     if(!search.in_num && !search.fav_num)
     {
         printf("nothing to search!!!\n");
@@ -324,7 +323,7 @@ int main(const int argc, const char** argv)
     }
 
     size_t cnt = parse(&totalRec, &search);
-    printf("cnt = %lu\n", cnt);
+    //printf("cnt = %lu\n", cnt);
 
     qsort(totalRec, cnt, sizeof(newsRecord), cmp);
     //printf("sorting!!!\n");
@@ -343,6 +342,5 @@ int main(const int argc, const char** argv)
     }
     free(temp);
     fclose(fout);
-    */
     return 0;
 }
